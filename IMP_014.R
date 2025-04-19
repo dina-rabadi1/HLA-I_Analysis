@@ -7,6 +7,12 @@ library(ggplot2)
 library(pheatmap)
 library(RColorBrewer)
 
+# Setting directory
+setwd("~/Documents/Github/HLA-I_Analysis/")
+#make data file in HLA-I_Analysis then save it
+
+
+
 # Define the path to your data files
 data_path <- "/Users/dinarabadi/Desktop/2704DR"
 
