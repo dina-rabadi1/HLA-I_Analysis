@@ -169,7 +169,7 @@ if (sys.nframe() == 0) {
 }
 
 # Set the path to your data directory
-my_directory <- "/Users/dinarabadi/Desktop/2704DR"  # Replace with your actual path
+my_directory <- "/Users/dinarabadi/Documents/Github/HLA-I_Analysis/rawdata/imp_014_rawdata"  # Replace with your actual path
 
 # Run the concatenation function
 combined_data <- concatenate_peptide_data(my_directory)
