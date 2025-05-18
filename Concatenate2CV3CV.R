@@ -156,7 +156,7 @@ main <- function() {
     
     # Save the output
     write_tsv(combined_data, output_file)
-    cat("\nSuccessfully saved combined data to", output_file, "\n")
+    cat("\nSuccessfully saved combined data to", output_file, "s\n")
     
   }, error = function(e) {
     cat("Error:", e$message, "\n")
