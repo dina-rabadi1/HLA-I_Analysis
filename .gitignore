@@ -49,4 +49,23 @@ po/*~
 rsconnect/
 
 # Ignore Mass Spec inputs
+*.DS_Store
 *.tsv
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.xlsx
+*.docx
+*.doc
+*.html
+*.txt
+*.csv
+*.numbers
+
+# Ignore specific md files
+results/cancer_atlas/README.md
+intensity_analysis_results/20250530_124915_all/analysis_report.md
+intensity_analysis_results/20250530_123326_all_exclude51S/analysis_report.md
+intensity_analysis_results/20250530_123730_all/analysis_report.md
+intensity_analysis_results/20250530_125546_all/analysis_report.md

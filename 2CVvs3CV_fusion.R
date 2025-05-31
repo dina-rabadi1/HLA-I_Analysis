@@ -2,7 +2,7 @@
 # Looking for 8-12mers that span the fusion junction
 
 # Setting directory
-setwd("~/Documents/Github/HLA-I_Analysis/")
+setwd("/Users/dinarabadi/Documents/Github/HLA-I_Analysis/")
 #make data file in HLA-I_Analysis then save it
 
 # Load required packages
@@ -18,7 +18,7 @@ if (!requireNamespace("ggrepel", quietly = TRUE)) {
 library(ggrepel)
 
 # Define the path to your data files
-data_path <- "/Users/dinarabadi/Desktop/2704DR"
+data_path <- "/Users/dinarabadi/Documents/Github/HLA-I_Analysis/unique_peptides_unmodified.tsv"
 
 # Define the fusion protein sequence - UPDATED based on provided sequences
 fusion_protein <- "RKREIFDRYGEEVKEFLAKAKEDF"
@@ -323,7 +323,7 @@ if (nrow(detected_junction_peptides) > 0) {
     pheatmap(
       presence_matrix_numeric,
       main = paste0("Presence of Fusion Peptide ", peptide, " Across Samples"),
-      color = c("white", "darkblue"),
+      color = c("white", "steelblue"),
       cluster_rows = FALSE,
       cluster_cols = TRUE,
       fontsize_row = 10,
@@ -339,7 +339,7 @@ if (nrow(detected_junction_peptides) > 0) {
     pheatmap(
       log_intensity_matrix,
       main = paste0("Intensity of Fusion Peptide ", peptide, " Across Samples (log10)"),
-      color = colorRampPalette(c("white", "steelblue", "darkblue"))(100),
+      color = colorRampPalette(c("white", "lightsteelblue", "steelblue"))(100),
       cluster_rows = FALSE,
       cluster_cols = TRUE,
       fontsize_row = 10,
@@ -382,7 +382,7 @@ if (nrow(detected_junction_peptides) > 0) {
              label = "DNAJB1", color = "darkgreen", fontface = "bold") +
     annotate("text", x = junction_position + 2, y = nrow(detected_details) + 1, 
              label = "PRKACA", color = "purple", fontface = "bold") +
-    scale_color_gradient(low = "lightblue", high = "darkblue") +
+    scale_color_gradient(low = "lightsteelblue", high = "steelblue") +
     theme_minimal() +
     labs(
       title = "Coverage of Fusion Junction by Detected Peptides",
@@ -482,7 +482,7 @@ if (nrow(detected_junction_peptides) > 0) {
   pheatmap(
     all_presence_2cv,
     main = "Presence of All Junction Peptides in 2CV Samples",
-    color = c("white", "darkblue"),
+    color = c("white", "steelblue"),
     cluster_rows = FALSE,
     cluster_cols = TRUE,
     fontsize_row = 10,
@@ -497,7 +497,7 @@ if (nrow(detected_junction_peptides) > 0) {
   pheatmap(
     all_presence_2cv,
     main = "Presence of All Junction Peptides in 2CV Samples",
-    color = c("white", "darkblue"),
+    color = c("white", "steelblue"),
     cluster_rows = FALSE,
     cluster_cols = TRUE,
     fontsize_row = 10,
@@ -512,7 +512,7 @@ if (nrow(detected_junction_peptides) > 0) {
   pheatmap(
     all_presence_3cv,
     main = "Presence of All Junction Peptides in 3CV Samples",
-    color = c("white", "darkblue"),
+    color = c("white", "steelblue"),
     cluster_rows = FALSE,
     cluster_cols = TRUE,
     fontsize_row = 10,
@@ -527,7 +527,7 @@ if (nrow(detected_junction_peptides) > 0) {
   pheatmap(
     all_presence_3cv,
     main = "Presence of All Junction Peptides in 3CV Samples",
-    color = c("white", "darkblue"),
+    color = c("white", "steelblue"),
     cluster_rows = FALSE,
     cluster_cols = TRUE,
     fontsize_row = 10,
@@ -542,7 +542,7 @@ if (nrow(detected_junction_peptides) > 0) {
   pheatmap(
     log_all_intensity_2cv,
     main = "Intensity of All Junction Peptides in 2CV Samples (log10)",
-    color = colorRampPalette(c("white", "steelblue", "darkblue"))(100),
+    color = colorRampPalette(c("white", "lightsteelblue", "steelblue"))(100),
     cluster_rows = FALSE,
     cluster_cols = TRUE,
     fontsize_row = 10,
@@ -556,7 +556,7 @@ if (nrow(detected_junction_peptides) > 0) {
   pheatmap(
     log_all_intensity_2cv,
     main = "Intensity of All Junction Peptides in 2CV Samples (log10)",
-    color = colorRampPalette(c("white", "steelblue", "darkblue"))(100),
+    color = colorRampPalette(c("white", "lightsteelblue", "steelblue"))(100),
     cluster_rows = FALSE,
     cluster_cols = TRUE,
     fontsize_row = 10,
@@ -570,7 +570,7 @@ if (nrow(detected_junction_peptides) > 0) {
   pheatmap(
     log_all_intensity_3cv,
     main = "Intensity of All Junction Peptides in 3CV Samples (log10)",
-    color = colorRampPalette(c("white", "steelblue", "darkblue"))(100),
+    color = colorRampPalette(c("white", "lightsteelblue", "steelblue"))(100),
     cluster_rows = FALSE,
     cluster_cols = TRUE,
     fontsize_row = 10,
@@ -584,7 +584,7 @@ if (nrow(detected_junction_peptides) > 0) {
   pheatmap(
     log_all_intensity_3cv,
     main = "Intensity of All Junction Peptides in 3CV Samples (log10)",
-    color = colorRampPalette(c("white", "steelblue", "darkblue"))(100),
+    color = colorRampPalette(c("white", "lightsteelblue", "steelblue"))(100),
     cluster_rows = FALSE,
     cluster_cols = TRUE,
     fontsize_row = 10,
@@ -665,7 +665,7 @@ if (nrow(detected_junction_peptides) > 0) {
     
     # Define colors for annotation
     ann_colors <- list(
-      CV_Type = c("2CV" = "cornflowerblue", "3CV" = "tomato"),
+      CV_Type = c("2CV" = "steelblue", "3CV" = "tomato"),
       Sample = setNames(
         rainbow(length(paired_samples)),
         paired_samples
@@ -677,7 +677,7 @@ if (nrow(detected_junction_peptides) > 0) {
     pheatmap(
       paired_presence_numeric,
       main = "Presence of Junction Peptides in Paired 2CV-3CV Samples",
-      color = c("white", "darkblue"),
+      color = c("white", "steelblue"),
       cluster_rows = FALSE,
       cluster_cols = FALSE,
       fontsize_row = 10,
@@ -694,7 +694,7 @@ if (nrow(detected_junction_peptides) > 0) {
     pheatmap(
       paired_presence_numeric,
       main = "Presence of Junction Peptides in Paired 2CV-3CV Samples",
-      color = c("white", "darkblue"),
+      color = c("white", "steelblue"),
       cluster_rows = FALSE,
       cluster_cols = FALSE,
       fontsize_row = 10,
@@ -711,7 +711,7 @@ if (nrow(detected_junction_peptides) > 0) {
     pheatmap(
       log_paired_intensity,
       main = "Intensity of Junction Peptides in Paired 2CV-3CV Samples (log10)",
-      color = colorRampPalette(c("white", "steelblue", "darkblue"))(100),
+      color = colorRampPalette(c("white", "lightsteelblue", "steelblue"))(100),
       cluster_rows = FALSE,
       cluster_cols = FALSE,
       fontsize_row = 10,
@@ -727,7 +727,7 @@ if (nrow(detected_junction_peptides) > 0) {
     pheatmap(
       log_paired_intensity,
       main = "Intensity of Junction Peptides in Paired 2CV-3CV Samples (log10)",
-      color = colorRampPalette(c("white", "steelblue", "darkblue"))(100),
+      color = colorRampPalette(c("white", "lightsteelblue", "steelblue"))(100),
       cluster_rows = FALSE,
       cluster_cols = FALSE,
       fontsize_row = 10,

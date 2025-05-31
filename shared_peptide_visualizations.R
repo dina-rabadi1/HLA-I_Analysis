@@ -2,13 +2,18 @@
 # shared_peptide_visualizations.R
 
 # Setting directory
-setwd("~/Documents/Github/HLA-I_Analysis/")
+setwd("/Users/dinarabadi/Documents/Github/HLA-I_Analysis")
 
 # Path to the combined peptides file
-combined_file <- "/Users/dinarabadi/Documents/Github/HLA-I_Analysis/combined_peptides.tsv"
+combined_file <- "/Users/dinarabadi/Documents/Github/HLA-I_Analysis/20250516/correlation_results_unique_peptides_all_20250520_101444/unique_peptides_all.tsv"
 
-# Create the main output directory first
-main_output_dir <- file.path(dirname(combined_file), "shared_peptide_visualizations")
+# Create timestamped main output directory
+timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+input_filename <- basename(combined_file)
+input_name_no_ext <- tools::file_path_sans_ext(input_filename)
+main_output_dir <- file.path(dirname(combined_file), 
+                             paste0("shared_peptide_visualizations_", 
+                                    input_name_no_ext, "_", timestamp))
 dir.create(main_output_dir, recursive = TRUE, showWarnings = FALSE)
 
 # Create subdirectories within main output directory
@@ -28,6 +33,25 @@ for (pkg in required_packages) {
     install.packages(pkg)
     library(pkg, character.only = TRUE)
   }
+}
+
+# Create a function to add input file information to Excel reports
+add_input_info_to_excel <- function(wb, input_file, timestamp) {
+  # Create a new worksheet for input information
+  addWorksheet(wb, "Input Info")
+  
+  # Create input information
+  input_info <- data.frame(
+    Parameter = c("Input File", "Analysis Date", "File Path"),
+    Value = c(basename(input_file), timestamp, input_file)
+  )
+  
+  # Write information
+  writeData(wb, "Input Info", input_info, startRow = 1, startCol = 1)
+  addStyle(wb, "Input Info", headerStyle, rows = 1, cols = 1:ncol(input_info))
+  
+  # Move worksheet to first position
+  worksheetOrder(wb) <- c(length(names(wb)), 1:(length(names(wb))-1))
 }
 
 # Read the combined peptides file
@@ -944,16 +968,17 @@ sample_sharing_df <- sample_sharing_df %>%
 
 # 10.2 Visualize the sharing matrix using Jaccard index
 p_jaccard <- plot_ly(sample_sharing_df,
-                     x = ~Sample2,
-                     y = ~Sample1,
-                     z = ~jaccard_index,
-                     type = "heatmap",
-                     colorscale = "Viridis",
-                     hoverinfo = "text",
-                     text = ~paste0("Sample1: ", Sample1,
-                                    "<br>Sample2: ", Sample2,
-                                    "<br>Shared peptides: ", shared_peptides,
-                                    "<br>Jaccard index: ", round(jaccard_index, 3)))
+                       x = ~Sample2,
+                       y = ~Sample1,
+                       z = ~jaccard_index,
+                       type = "heatmap",
+                       colorscale = "Hot",
+                       reversescale = TRUE,  # This makes high values red/yellow, low values blue
+                       hoverinfo = "text",
+                       text = ~paste0("Sample1: ", Sample1,
+                                      "<br>Sample2: ", Sample2,
+                                      "<br>Shared peptides: ", shared_peptides,
+                                      "<br>Jaccard index: ", round(jaccard_index, 3)))
 
 p_jaccard <- p_jaccard %>% layout(
   title = "Sample Similarity (Jaccard Index)",
@@ -1797,6 +1822,16 @@ for (i in 1:length(viz_files)) {
   }
 }
 
+# Create HTML footer
+html_footer <- '
+  <div class="footer">
+    <p>Analysis generated on %s | Input file: %s</p>
+    <p>Peptide Sharing Analysis Tool v1.0</p>
+  </div>
+</body>
+</html>
+'
+
 html_header <- '
 <!DOCTYPE html>
 <html>
@@ -1921,6 +1956,8 @@ html_header <- '
 
   <div class="summary">
     <h2>Analysis Summary</h2>
+    <p><strong>Input file:</strong> %s</p>
+    <p><strong>Analysis date:</strong> %s</p>
     <p>This dashboard presents an interactive analysis of peptide sharing across samples. The analysis is based on %d unique peptides across %d samples. Out of these peptides, %d (%d%%) are unique to a single sample, while %d (%d%%) are shared across multiple samples.</p>
     <p>The most prevalent peptide length is %dmer, making up %d%% of all peptides. Peptides of length %d amino acids show the highest rate of sharing across samples.</p>
   </div>
@@ -1979,6 +2016,8 @@ best_sharing_length <- avg_sharing_by_length$`Peptide Length`[which.max(avg_shar
 
 # Format the header with summary stats
 dashboard_header <- sprintf(html_header,
+                            basename(combined_file),
+                            format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
                             total_peptides,
                             num_samples,
                             unique_peptide_count,
@@ -1989,8 +2028,10 @@ dashboard_header <- sprintf(html_header,
                             most_common_length_pct,
                             best_sharing_length)
 
-# Format the footer with date
-dashboard_footer <- sprintf(html_footer, format(Sys.time(), "%Y-%m-%d %H:%M:%S"))
+# Format the footer with date and input file
+dashboard_footer <- sprintf(html_footer, 
+                            format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+                            basename(combined_file))
 
 # Start building the dashboard HTML
 dashboard_html <- dashboard_header
@@ -2106,6 +2147,8 @@ cat("Dashboard created successfully!\n")
 ################################################################################
 
 cat("\nEnhanced visualization and Excel report generation complete!\n")
+cat("Input file:", combined_file, "\n")
+cat("Output directory:", main_output_dir, "\n")
 cat("Interactive visualizations saved to:", viz_dir, "\n")
 cat("Excel reports saved to:", excel_dir, "\n")
 cat("The following files were created:\n")

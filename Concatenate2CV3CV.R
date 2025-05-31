@@ -10,6 +10,8 @@ setwd("~/Documents/Github/HLA-I_Analysis/")
 library(tidyverse)
 library(readr)
 library(stringr)
+library(dplyr)
+library(tidyr)
 
 # Function to list and categorize TSV files
 list_tsv_files <- function(directory) {
@@ -99,7 +101,7 @@ concatenate_peptide_data <- function(directory) {
     detected_both = (Peptide %in% data_2cv$Peptide) & (Peptide %in% data_3cv$Peptide)
   )
   
-  # Step 5: Create combined dataset
+  # Step 5: Merging 2cv and 3cv
   # Start with 2cv data
   if (!is.null(data_2cv) && nrow(data_2cv) > 0) {
     # Add detection flags
@@ -120,6 +122,7 @@ concatenate_peptide_data <- function(directory) {
   
   # Combine both datasets
   combined_data <- bind_rows(data_2cv, data_3cv)
+  
   
   # Step 6: Calculate detection statistics
   detected_2cv_only <- sum(peptide_detection$detected_2cv & !peptide_detection$detected_3cv)
