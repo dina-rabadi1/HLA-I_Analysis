@@ -1,0 +1,931 @@
+---
+title: "Immunopeptidomics Analysis: PNG Plots and CSV Tables Only"
+author: "Dina Rabadi"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: 
+  html_document:
+    theme: minimal
+    toc: false
+    code_folding: hide
+params:
+  dataset_name: "imp_014"
+  data_directory: "~/Documents/Github/HLA-I_Analysis/directory/data/imp_014"
+  filter_modified: FALSE
+  exclude_samples: NULL
+  include_samples: NULL
+  # Intensity analysis parameters
+  run_intensity_analysis: TRUE
+  intensity_analysis_data_source: "combined_data"
+  intensity_analysis_file: NULL
+  intensity_analysis_folder: NULL
+  intensity_exclude_samples: NULL
+  intensity_include_samples: NULL
+  # Fusion search parameters
+  run_fusion_search: TRUE
+  fusion_search_data_source: "combined_data"
+  fusion_search_file: NULL
+  # Peptide sharing analysis parameters
+  run_peptide_sharing: TRUE
+  peptide_sharing_min_length: 8
+  peptide_sharing_max_length: 12
+  peptide_sharing_exclude_samples: NULL
+  peptide_sharing_include_samples: NULL
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, 
+  warning = FALSE, 
+  message = FALSE,
+  results = 'hide'
+)
+
+# Set working directory to project root
+setwd("~/Documents/Github/HLA-I_Analysis/directory")
+
+# Load required libraries
+library(tidyverse)
+library(readr)
+library(ggplot2)
+library(gridExtra)
+library(scales)
+library(writexl)  # For Excel output
+library(kableExtra)  # For enhanced tables
+library(openxlsx)  # For advanced Excel functionality
+library(UpSetR)  # For UpSet plots
+library(VennDiagram)  # For Venn diagrams (if needed)
+library(RColorBrewer)  # For color palettes
+library(ggdendro)  # For dendrogram plots
+
+# Source all function files
+source("functions/core/immunopeptidomics_core_functions.R")
+source("functions/validation/immunopeptidomics_validation_functions.R") 
+source("functions/plotting/immunopeptidomics_plotting_functions.R")
+source("functions/utils/immunopeptidomics_utils_functions.R")
+source("functions/analysis/immunopeptidomics_intensity_analysis_functions.R")
+source("functions/analysis/immunopeptidomics_fusion_search_functions.R")
+source("functions/analysis/immunopeptidomics_peptide_sharing_functions.R")
+source("functions/analysis/fix_transcriptome.R")
+source("functions/analysis/immunopeptidomics_ru148_analysis_functions.R")
+source("functions/analysis/multiomic_shared_neoantigen.R")
+source("functions/analysis/immunopeptidomics_gtex_analysis_functions.R")
+
+# Analysis parameters
+analysis_params <- list(
+  dataset_name = params$dataset_name,
+  data_directory = params$data_directory,
+  filter_modified = params$filter_modified,
+  exclude_samples = params$exclude_samples,
+  include_samples = params$include_samples,
+  analysis_type = "streamlined_png_csv",
+  timestamp = format(Sys.time(), "%Y%m%d_%H%M%S"),
+  # Intensity analysis parameters
+  run_intensity_analysis = params$run_intensity_analysis,
+  intensity_analysis_data_source = params$intensity_analysis_data_source,
+  intensity_analysis_file = params$intensity_analysis_file,
+  intensity_analysis_folder = params$intensity_analysis_folder,
+  intensity_exclude_samples = params$intensity_exclude_samples,
+  intensity_include_samples = params$intensity_include_samples,
+  # Fusion search parameters
+  run_fusion_search = params$run_fusion_search,
+  fusion_search_data_source = params$fusion_search_data_source,
+  fusion_search_file = params$fusion_search_file,
+  # Peptide sharing parameters
+  run_peptide_sharing = params$run_peptide_sharing,
+  peptide_sharing_min_length = params$peptide_sharing_min_length,
+  peptide_sharing_max_length = params$peptide_sharing_max_length,
+  peptide_sharing_exclude_samples = params$peptide_sharing_exclude_samples,
+  peptide_sharing_include_samples = params$peptide_sharing_include_samples
+)
+
+# Create output directory structure (plots/ and tables/ with analysis subdirectories)
+output_dir <- create_output_directory_enhanced(
+  base_dir = getwd(),
+  dataset_name = analysis_params$dataset_name,
+  analysis_type = analysis_params$analysis_type
+)
+
+cat("=== IMMUNOPEPTIDOMICS ANALYSIS STARTED ===\n")
+cat("Dataset:", analysis_params$dataset_name, "\n")
+cat("Output directory:", output_dir, "\n")
+cat("Timestamp:", analysis_params$timestamp, "\n")
+cat("Intensity analysis enabled:", analysis_params$run_intensity_analysis, "\n")
+cat("Fusion search enabled:", analysis_params$run_fusion_search, "\n")
+cat("Peptide sharing enabled:", analysis_params$run_peptide_sharing, "\n\n")
+```
+
+```{r validate_and_load}
+cat("STEP 1: Validating input and loading data...\n")
+
+# Validate input directory
+validation_results <- validate_input_directory(analysis_params$data_directory)
+if (!validation_results$valid) {
+  stop("Input validation failed: ", paste(validation_results$errors, collapse = "; "))
+}
+
+# Get file lists and load raw data
+file_lists <- list_tsv_files(analysis_params$data_directory)
+data_2cv_raw <- read_peptide_files(file_lists$files_2cv, "2cv")
+data_3cv_raw <- read_peptide_files(file_lists$files_3cv, "3cv")
+
+cat("✓ Loaded", ifelse(is.null(data_2cv_raw), 0, nrow(data_2cv_raw)), "2CV entries\n")
+cat("✓ Loaded", ifelse(is.null(data_3cv_raw), 0, nrow(data_3cv_raw)), "3CV entries\n\n")
+```
+
+```{r before_analysis}
+cat("STEP 2: Analyzing raw data (before combination)...\n")
+
+# Analyze raw data before combination
+raw_analysis <- analyze_raw_data(data_2cv_raw, data_3cv_raw)
+sample_analysis_before <- analyze_samples_before_combination(data_2cv_raw, data_3cv_raw)
+
+cat("✓ Before-combination analysis completed\n\n")
+```
+
+```{r data_combination}
+cat("STEP 3: Combining 2CV and 3CV data...\n")
+
+# Perform enhanced data combination
+combined_data <- combine_peptide_data_enhanced(
+  analysis_params$data_directory, 
+  filter_modified = analysis_params$filter_modified
+)
+
+cat("✓ Data combination completed:", nrow(combined_data), "unique peptides\n\n")
+```
+
+```{r validation}
+cat("STEP 4: Validating combination results...\n")
+
+# Validate the combination process
+combination_validation <- validate_combination(combined_data, raw_analysis)
+intensity_comparison <- compare_intensity_distributions(data_2cv_raw, data_3cv_raw, combined_data)
+validation_report <- generate_validation_report(raw_analysis, combination_validation, intensity_comparison)
+
+cat("✓ Post-combination validation completed\n\n")
+```
+
+```{r correlation_analysis}
+cat("STEP 5: Performing correlation analysis with progress tracking...\n")
+
+# Prepare data and perform correlation analysis WITH PROGRESS TRACKING
+correlation_data <- prepare_correlation_data(combined_data)
+
+# Use the enhanced function with progress indicators
+correlation_results <- perform_correlation_analysis_with_progress(
+  correlation_data$data_2cv, 
+  correlation_data$data_3cv
+)
+
+cat("✓ Correlation analysis completed\n\n")
+```
+
+```{r statistical_analysis}
+cat("STEP 6: Generating statistical summaries...\n")
+
+# Calculate comprehensive statistics
+nonzero_data <- combined_data %>% filter(!is.na(final_intensity) & final_intensity > 0)
+
+final_intensity_stats <- calculate_statistics(combined_data$final_intensity, "Final_Intensity_All")
+nonzero_intensity_stats <- calculate_statistics(nonzero_data$final_intensity, "Final_Intensity_NonZero") 
+log_intensity_stats <- calculate_statistics(log10(nonzero_data$final_intensity), "Log10_Final_Intensity")
+
+comprehensive_statistics <- rbind(final_intensity_stats, nonzero_intensity_stats, log_intensity_stats)
+
+# Calculate percentiles
+percentiles <- quantile(nonzero_data$final_intensity, 
+                       probs = c(0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99), 
+                       na.rm = TRUE)
+intensity_percentiles <- data.frame(
+  Percentile = names(percentiles),
+  Value = as.numeric(percentiles)
+)
+
+cat("✓ Statistical analysis completed\n\n")
+```
+
+```{r create_plots}
+cat("STEP 7: Creating all plots...\n")
+
+# Create all plot objects
+all_plots <- list()
+
+# Before/after comparison plots
+all_plots$before_after <- create_before_after_intensity_plots(
+  data_2cv_raw, data_3cv_raw, combined_data, file.path(output_dir, "plots")
+)
+
+# Peptide overlap plot
+all_plots$overlap <- create_peptide_overlap_plot(
+  data_2cv_raw, data_3cv_raw, file.path(output_dir, "plots")
+)
+
+# Correlation plots
+all_plots$correlation <- create_correlation_plots(
+  correlation_results, file.path(output_dir, "plots")
+)
+
+# Statistical summary plots
+all_plots$statistical <- create_statistical_summary_plots(
+  combined_data, file.path(output_dir, "plots")
+)
+
+cat("✓ All plot objects created\n\n")
+```
+
+```{r save_all_outputs}
+cat("STEP 8: Saving all PNG plots and CSV tables...\n")
+
+# Compile all results for saving
+all_results <- list(
+  raw_analysis = raw_analysis,
+  sample_analysis_before = sample_analysis_before,
+  combination_validation = combination_validation,
+  intensity_comparison = intensity_comparison,
+  validation_report = validation_report,
+  correlation_results = correlation_results,
+  comprehensive_statistics = comprehensive_statistics,
+  intensity_percentiles = intensity_percentiles,
+  combined_data = combined_data
+)
+
+# Save all plots as numbered PNG files with improved naming
+saved_plots <- save_all_plots_as_png_improved(all_plots, output_dir, analysis_params$dataset_name, analysis_params$timestamp)
+
+# Save all tables as numbered CSV files with improved naming
+saved_tables <- save_all_tables_as_csv_improved(all_results, output_dir, analysis_params$dataset_name, analysis_params$timestamp)
+
+cat("\n=== MAIN ANALYSIS COMPLETED ===\n")
+cat("Core PNG files saved:", length(saved_plots), "\n")
+cat("Core CSV files saved:", length(saved_tables), "\n")
+cat("Output directory:", output_dir, "\n")
+```
+
+```{r intensity_analysis, eval=analysis_params$run_intensity_analysis}
+cat("STEP 9: Performing intensity analysis...\n")
+
+if (analysis_params$run_intensity_analysis) {
+  
+  # Prepare intensity analysis data
+  intensity_data <- prepare_intensity_data(
+    data_source = analysis_params$intensity_analysis_data_source,
+    combined_data = combined_data,
+    file_path = analysis_params$intensity_analysis_file,
+    folder_path = analysis_params$intensity_analysis_folder,
+    exclude_samples = analysis_params$intensity_exclude_samples,
+    include_samples = analysis_params$intensity_include_samples
+  )
+  
+  # Perform comprehensive intensity analysis
+  intensity_results <- perform_intensity_analysis(
+    data = intensity_data,
+    output_dir = output_dir,
+    dataset_name = analysis_params$dataset_name,
+    timestamp = analysis_params$timestamp
+  )
+  
+  # Create intensity analysis visualizations
+  intensity_plots <- create_intensity_analysis_plots(
+    analysis_results = intensity_results,
+    dataset_name = analysis_params$dataset_name,
+    timestamp = analysis_params$timestamp
+  )
+  
+  cat("✓ Intensity analysis completed\n")
+  cat("  - Sample breakdown analysis\n")
+  cat("  - Missing/zero value analysis\n")
+  cat("  - Comprehensive statistical analysis\n")
+  cat("  - Percentiles and thresholds\n")
+  cat("  - Spectral count correlation analysis\n")
+  cat("  - Individual and combined visualizations\n")
+  cat("  - Files saved in:", file.path(basename(output_dir), "intensity_analysis"), "\n\n")
+  
+} else {
+  cat("Intensity analysis skipped (disabled in parameters)\n\n")
+}
+```
+
+```{r fusion_search, eval=analysis_params$run_fusion_search}
+cat("STEP 10: Performing DNAJB1-PRKACA fusion peptide search...\n")
+
+if (analysis_params$run_fusion_search) {
+  
+  # Prepare fusion search data
+  fusion_data <- prepare_fusion_search_data(
+    data_source = analysis_params$fusion_search_data_source,
+    combined_data = combined_data,
+    file_path = analysis_params$fusion_search_file
+  )
+  
+  # Perform fusion peptide search
+  fusion_results <- perform_fusion_search(
+    data = fusion_data,
+    output_dir = output_dir,
+    dataset_name = analysis_params$dataset_name,
+    timestamp = analysis_params$timestamp,
+    intensity_percentiles = intensity_percentiles
+  )
+
+  # Create fusion search visualizations (only if peptides found)
+  fusion_plots <- create_fusion_search_plots(
+    search_results = fusion_results,
+    dataset_name = analysis_params$dataset_name,
+    timestamp = analysis_params$timestamp
+  )
+  
+  cat("✓ Fusion peptide search completed\n")
+  cat("  - DNAJB1-PRKACA fusion sequence:", FUSION_SEQUENCE, "\n")
+  cat("  - Junction position:", JUNCTION_POSITION, "\n")
+  cat("  - Theoretical spanning peptides generated\n")
+  cat("  - Search performed against dataset\n")
+  cat("  - Results and visualizations created\n")
+  cat("  - Files saved in:", file.path(basename(output_dir), "fusion_search"), "\n\n")
+  
+} else {
+  cat("Fusion peptide search skipped (disabled in parameters)\n\n")
+}
+```
+
+```{r save_all_outputs_updated}
+cat("STEP 8: Saving all PNG plots and CSV tables...\n")
+
+# Compile all results for saving
+all_results <- list(
+  raw_analysis = raw_analysis,
+  sample_analysis_before = sample_analysis_before,
+  combination_validation = combination_validation,
+  intensity_comparison = intensity_comparison,
+  validation_report = validation_report,
+  correlation_results = correlation_results,
+  comprehensive_statistics = comprehensive_statistics,
+  intensity_percentiles = intensity_percentiles,
+  combined_data = combined_data
+)
+
+# Save all plots as numbered PNG files with improved naming
+saved_plots <- save_all_plots_as_png_improved(all_plots, output_dir, analysis_params$dataset_name, analysis_params$timestamp)
+
+# Save all tables as numbered CSV files with improved naming
+saved_tables <- save_all_tables_as_csv_improved(all_results, output_dir, analysis_params$dataset_name, analysis_params$timestamp)
+
+cat("\n=== MAIN ANALYSIS COMPLETED ===\n")
+cat("Core PNG files saved:", length(saved_plots), "\n")
+cat("Core CSV files saved:", length(saved_tables), "\n")
+cat("Output directory:", output_dir, "\n")
+```
+
+```{r peptide_sharing_analysis, eval=analysis_params$run_peptide_sharing}
+cat("STEP 11: Performing peptide sharing and distribution analysis...\n")
+
+if (analysis_params$run_peptide_sharing) {
+  
+  # Prepare peptide sharing data
+  sharing_data <- prepare_peptide_sharing_data(
+    combined_data = combined_data,
+    min_length = analysis_params$peptide_sharing_min_length,
+    max_length = analysis_params$peptide_sharing_max_length,
+    exclude_samples = analysis_params$peptide_sharing_exclude_samples,
+    include_samples = analysis_params$peptide_sharing_include_samples
+  )
+  
+  # Perform comprehensive peptide sharing analysis
+  sharing_results <- perform_peptide_sharing_analysis(
+    peptide_data = sharing_data,
+    output_dir = output_dir,
+    dataset_name = analysis_params$dataset_name,
+    timestamp = analysis_params$timestamp
+  )
+  
+  # Create peptide sharing visualizations
+  sharing_plots <- create_peptide_sharing_plots(
+    sharing_results = sharing_results,
+    dataset_name = analysis_params$dataset_name,
+    timestamp = analysis_params$timestamp
+  )
+  
+  cat("✓ Peptide sharing analysis completed\n")
+  cat("  - Sample distribution analysis\n")
+  cat("  - Unique vs shared peptide classification\n")
+  cat("  - Peptide length distribution analysis\n")
+  cat("  - Robust sharing threshold analysis\n")
+  cat("  - Sample similarity (Jaccard index) analysis\n")
+  cat("  - UpSet plot for sample intersections\n")
+  cat("  - Gene-based sharing analysis (if available)\n")
+  cat("  - Static PNG visualizations and CSV/Excel reports\n")
+  cat("  - Files saved in:", file.path(basename(output_dir), "peptide_sharing"), "\n\n")
+  
+} else {
+  cat("Peptide sharing analysis skipped (disabled in parameters)\n\n")
+}
+```
+
+```{r final_summary_updated_with_sharing}
+# Create enhanced final summary table
+final_summary <- data.frame(
+  Metric = c(
+    "Dataset Name",
+    "Analysis Timestamp", 
+    "Input 2CV Files",
+    "Input 3CV Files",
+    "Raw 2CV Entries",
+    "Raw 3CV Entries",
+    "Combined Unique Peptides",
+    "Peptides in Both Methods",
+    "Overall Pearson Correlation",
+    "Core PNG Files Generated", 
+    "Core CSV Files Generated",
+    "Intensity Analysis Enabled",
+    "Fusion Search Enabled",
+    "Peptide Sharing Enabled",
+    "Output Directory"
+  ),
+  Value = c(
+    analysis_params$dataset_name,
+    analysis_params$timestamp,
+    length(file_lists$files_2cv),
+    length(file_lists$files_3cv),
+    ifelse(is.null(data_2cv_raw), 0, nrow(data_2cv_raw)),
+    ifelse(is.null(data_3cv_raw), 0, nrow(data_3cv_raw)),
+    nrow(combined_data),
+    sum(combined_data$detected_both),
+    ifelse(!is.null(correlation_results$overall), 
+           round(correlation_results$overall$pearson, 3), "N/A"),
+    length(saved_plots),
+    length(saved_tables),
+    analysis_params$run_intensity_analysis,
+    analysis_params$run_fusion_search,
+    analysis_params$run_peptide_sharing,
+    basename(output_dir)
+  )
+)
+
+# Save the final summary
+write_csv(final_summary, file.path(output_dir, "tables", 
+                                  paste0(analysis_params$timestamp, "_", 
+                                        analysis_params$dataset_name, 
+                                        "_99_FINAL_SUMMARY.csv")))
+
+# Print summary to console
+cat("\n=== FINAL ANALYSIS SUMMARY ===\n")
+for(i in 1:nrow(final_summary)) {
+  cat(sprintf("%-35s: %s\n", final_summary$Metric[i], final_summary$Value[i]))
+}
+
+cat("\n=== KEY OUTPUT FILES (MAIN ANALYSIS) ===\n")
+cat("📊 Main Combined Dataset: *_90_main_combined_dataset.tsv\n")
+cat("📈 Key Plots:\n")
+cat("   - *_01_data_validation_intensity_histogram_before_after.png\n") 
+cat("   - *_02_data_validation_intensity_boxplot_before_after.png\n")
+cat("   - *_03_correlation_analysis_overall_2cv_vs_3cv.png\n")
+cat("   - *_04_data_validation_peptide_overlap_venn.png\n")
+cat("📋 Key Tables:\n")
+cat("   - *_00_file_index_all_outputs.csv (lists all files)\n")
+cat("   - *_20_correlation_analysis_summary_2cv_vs_3cv.csv\n")
+cat("   - *_30_statistical_summary_comprehensive_statistics.csv\n")
+cat("   - *_99_FINAL_SUMMARY.csv\n")
+
+if (analysis_params$run_intensity_analysis) {
+  cat("\n=== INTENSITY ANALYSIS FILES ===\n")
+  cat("📁 Location: intensity_analysis/ subdirectory\n")
+  cat("📈 Key Plots:\n")
+  cat("   - *_01_intensity_status_pie_chart.png\n")
+  cat("   - *_02_raw_intensity_histogram.png\n")
+  cat("   - *_10_combined_intensity_analysis.png\n")
+  cat("📋 Key Tables:\n")
+  cat("   - *_01_sample_breakdown_summary.csv\n")
+  cat("   - *_03_comprehensive_statistics.csv\n")
+  cat("   - *_06_intensity_thresholds.csv\n")
+}
+
+if (analysis_params$run_fusion_search) {
+  cat("\n=== FUSION SEARCH FILES ===\n")
+  cat("📁 Location: fusion_search/ subdirectory\n")
+  cat("🧬 Target: DNAJB1-PRKACA fusion junction\n")
+  cat("📈 Key Plots (if peptides found):\n")
+  cat("   - *_01_fusion_peptide_intensity_by_sample.png\n")
+  cat("   - *_04_fusion_peptide_positions.png\n")
+  cat("📋 Key Tables:\n")
+  cat("   - *_01_fusion_peptide_results.xlsx\n")
+  cat("   - *_04_theoretical_vs_found.xlsx\n")
+  cat("   - *_05_fusion_search_summary.csv\n")
+}
+
+if (analysis_params$run_peptide_sharing) {
+  cat("\n=== PEPTIDE SHARING ANALYSIS FILES ===\n")
+  cat("📁 Location: peptide_sharing/ subdirectory\n")
+  cat("🔗 Analysis: Sample distribution and peptide sharing patterns\n")
+  cat("📈 Key Plots:\n")
+  cat("   - *_01_peptide_count_distribution.png\n")
+  cat("   - *_02_unique_vs_shared_pie.png\n")
+  cat("   - *_06_jaccard_similarity_heatmap.png\n")
+  cat("   - *_07_upset_sample_intersections.png\n")
+  cat("   - *_08_combined_basic_analysis.png\n")
+  cat("📋 Key Tables:\n")
+  cat("   - *_01_peptide_sample_distribution.csv\n")
+  cat("   - *_06_robust_sharing_summary.csv\n")
+  cat("   - *_08_sample_jaccard_similarity.csv\n")
+  cat("   - *_07_robust_peptides_*.csv (multiple thresholds)\n")
+}
+
+cat("\n=== FILE NAMING CONVENTION ===\n")
+cat("All files start with: YYYYMMDD_HHMMSS_", analysis_params$dataset_name, "_\n")
+cat("Main analysis: organized by category (01_data_validation, 02_correlation_analysis, etc.)\n")
+cat("Sub-analyses: in dedicated subdirectories with their own numbering\n")
+cat("CSV files: numbered 00-99, with 00 being index and 99 being final summary\n")
+
+cat("\n✅ Complete analysis pipeline finished successfully!\n")
+cat("📁 All outputs saved to:", output_dir, "\n")
+
+# Count total files across all analyses
+total_files <- length(list.files(output_dir, recursive = TRUE, pattern = "\\.(png|csv|xlsx|tsv)$"))
+cat("📊 Total files generated:", total_files, "\n")
+
+cat("\n=== ANALYSIS CAPABILITIES SUMMARY ===\n")
+cat("🔬 Core Pipeline: Data validation, correlation analysis, statistical summaries\n")
+if (analysis_params$run_intensity_analysis) {
+  cat("📊 Intensity Analysis: Comprehensive statistical analysis of peptide intensities\n")
+}
+if (analysis_params$run_fusion_search) {
+  cat("🧬 Fusion Search: DNAJB1-PRKACA junction spanning peptide detection\n")
+}
+if (analysis_params$run_peptide_sharing) {
+  cat("🔗 Peptide Sharing: Sample distribution, similarity, and robust sharing analysis\n")
+}
+cat("📈 Output Format: Static PNG plots and CSV/Excel spreadsheets only\n")
+```
+
+```{r fix_transcriptome}
+cat("STEP 12: Processing transcriptome data...\n")
+
+# Source the correct transcriptome functions
+source("functions/analysis/fix_transcriptome.R")
+
+# Process transcriptome data
+processed_transcriptome <- fix_transcriptome()
+
+# Get summary statistics
+summary_stats <- get_transcriptome_summary(processed_transcriptome)
+
+cat("✓ Transcriptome processing completed\n\n")
+```
+
+```{r ru148_analysis}
+cat("STEP 13: Performing RU148 multi-omics analysis...\n")
+
+# Create RU148 analysis output directory
+ru148_output_dir <- file.path(output_dir, "ru148_analysis")
+
+# Perform comprehensive RU148 analysis
+ru148_analysis_results <- perform_ru148_analysis(
+  combined_data = combined_data,
+  data_directory = analysis_params$data_directory,
+  output_dir = ru148_output_dir,
+  dataset_name = analysis_params$dataset_name,
+  timestamp = analysis_params$timestamp,
+  verbose = TRUE
+)
+
+cat("✓ RU148 multi-omics analysis completed\n")
+cat("  - Tumor-exclusive peptides analyzed:", nrow(ru148_analysis_results$tumor_exclusive_results$peptides), "\n")
+cat("  - Tumor-upregulated peptides analyzed:", nrow(ru148_analysis_results$tumor_upregulated_results$peptides), "\n")
+cat("  - Visualizations created:", length(ru148_analysis_results$created_plots), "\n")
+cat("  - Data files saved:", length(ru148_analysis_results$saved_files), "\n")
+cat("  - Results directory:", basename(ru148_output_dir), "\n\n")
+```
+
+```{r multiomic_shared_neoantigen}
+cat("STEP 14: Performing Multiomic shared neoantigen analysis...\n")
+
+# Fix namespace conflicts
+library(dplyr)
+select <- dplyr::select
+filter <- dplyr::filter
+mutate <- dplyr::mutate
+
+# Call the function with corrected parameters
+results <- analyze_neoantigens(
+  combined_data = combined_data,
+  min_samples_threshold = 6,
+  samples_to_exclude = c("51S"),
+  negative_control_samples = c("148N"),
+  peptide_length_min = 8,
+  peptide_length_max = 12,
+  log2fc_up_threshold = 1,
+  log2fc_down_threshold = -1,
+  data_directory = "data",  # Changed from "directory/data" to "data"
+  output_dir = file.path(output_dir, "neoantigen_analysis")  # Put results in subdirectory
+)
+
+# Access the results
+integrated_peptides <- results$integrated_data
+summary_statistics <- results$summary_stats
+
+cat("✓ Multi-omics neoantigen analysis completed\n")
+cat("  - Total peptides analyzed:", nrow(integrated_peptides), "\n")
+cat("  - Data availability:\n")
+cat("    - Transcriptome:", ifelse(results$data_availability$transcriptome, "✓", "✗"), "\n")
+cat("    - LFQ Proteome:", ifelse(results$data_availability$lfq, "✓", "✗"), "\n")
+cat("    - TMT Proteome:", ifelse(results$data_availability$tmt, "✓", "✗"), "\n")
+cat("  - Results saved to:", basename(results$output_dir), "\n\n")
+# Access the results
+integrated_peptides <- results$integrated_data
+summary_statistics <- results$summary_stats
+```
+
+```{r gtex_analysis}
+cat("STEP 15: Performing GTEx normal tissue expression analysis...\n")
+
+# Source the GTEx analysis functions
+source("functions/analysis/immunopeptidomics_gtex_analysis_functions.R")
+
+# GTEx Analysis Parameters (configurable)
+gtex_tpm_thresholds <- c(0.5, 1, 2, 5)
+gtex_data_path <- "~/Documents/Github/HLA-I_Analysis/directory/data/GTEx_Analysis_v10_RNASeQCv2.4.2_gene_median_tpm.gct"
+
+# Tissue filtering options (configurable)
+exclude_immune_privileged <- TRUE  # Brain, Eye, Testis
+exclude_high_turnover <- TRUE      # Skin, Colon, Small_Intestine
+include_all_tissues <- FALSE       # Override: use all tissues regardless
+
+# Create GTEx analysis output directory
+gtex_output_dir <- file.path(output_dir, "gtex_analysis")
+
+# Check if neoantigen analysis was performed
+# Use the specific directory where neoantigen analysis results exist
+neoantigen_output_dir <- "/Users/dinarabadi/Documents/Github/HLA-I_Analysis/directory/results/20250606_021833_imp_014_streamlined_png_csv/neoantigen_analysis"
+
+# Debug: Print the actual paths being checked
+cat("Looking for neoantigen analysis in:", neoantigen_output_dir, "\n")
+cat("Directory exists:", dir.exists(neoantigen_output_dir), "\n")
+
+if (dir.exists(neoantigen_output_dir)) {
+  subdirs <- list.dirs(neoantigen_output_dir, recursive = FALSE)
+  cat("Found subdirectories:", length(subdirs), "\n")
+  if (length(subdirs) > 0) {
+    cat("Subdirectories:\n")
+    for (subdir in subdirs) {
+      cat("  -", basename(subdir), "\n")
+    }
+  }
+}
+
+if (!dir.exists(neoantigen_output_dir) || length(list.dirs(neoantigen_output_dir, recursive = FALSE)) == 0) {
+  cat("WARNING: Neoantigen analysis directory not found or empty. Skipping GTEx analysis.\n")
+  cat("Please run the multiomic shared neoantigen analysis first.\n\n")
+} else {
+  
+  # Perform comprehensive GTEx analysis
+  gtex_results <- perform_gtex_analysis(
+    neoantigen_output_dir = neoantigen_output_dir,
+    gtex_output_dir = gtex_output_dir,
+    dataset_name = analysis_params$dataset_name,
+    timestamp = analysis_params$timestamp,
+    gtex_data_path = gtex_data_path,
+    gtex_tpm_thresholds = gtex_tpm_thresholds,
+    exclude_immune_privileged = exclude_immune_privileged,
+    exclude_high_turnover = exclude_high_turnover,
+    include_all_tissues = include_all_tissues,
+    verbose = TRUE
+  )
+  
+  cat("✓ GTEx analysis completed successfully!\n")
+  cat("  - Input files processed:", length(gtex_results$input_files_processed), "\n")
+  cat("  - TPM thresholds tested:", length(gtex_tmp_thresholds), "\n")
+  cat("  - Analysis results:", length(gtex_results$results), "\n")
+  cat("  - Plots created:", sum(sapply(gtex_results$plots_created, length)), "\n")
+  cat("  - Results saved in:", basename(gtex_output_dir), "\n\n")
+  
+}
+```
+
+
+
+```{r update_final_summary}
+# Update the final summary to include RU148 analysis results
+final_summary_updated <- rbind(
+  final_summary,
+  data.frame(
+    Metric = c(
+      "RU148 Analysis Enabled",
+      "RU148 Tumor-Exclusive Peptides", 
+      "RU148 Tumor-Upregulated Peptides",
+      "RU148 Plots Generated",
+      "RU148 Files Generated"
+    ),
+    Value = c(
+      "TRUE",
+      nrow(ru148_analysis_results$tumor_exclusive_results$peptides),
+      nrow(ru148_analysis_results$tumor_upregulated_results$peptides),
+      length(ru148_analysis_results$created_plots),
+      length(ru148_analysis_results$saved_files)
+    )
+  )
+)
+
+# Save the updated final summary
+write_csv(final_summary_updated, file.path(output_dir, "tables", 
+                                          paste0(analysis_params$timestamp, "_", 
+                                                analysis_params$dataset_name, 
+                                                "_99_FINAL_SUMMARY.csv")))
+
+# Display the final analysis summary
+cat("\n=== FINAL ANALYSIS SUMMARY (UPDATED) ===\n")
+for(i in 1:nrow(final_summary_updated)) {
+  cat(sprintf("%-35s: %s\n", final_summary_updated$Metric[i], final_summary_updated$Value[i]))
+}
+
+cat("\n=== KEY OUTPUT FILES (MAIN ANALYSIS) ===\n")
+cat("📊 Main Combined Dataset: *_90_main_combined_dataset.tsv\n")
+cat("📈 Key Plots:\n")
+cat("   - *_01_data_validation_intensity_histogram_before_after.png\n") 
+cat("   - *_02_data_validation_intensity_boxplot_before_after.png\n")
+cat("   - *_03_correlation_analysis_overall_2cv_vs_3cv.png\n")
+cat("   - *_04_data_validation_peptide_overlap_venn.png\n")
+cat("📋 Key Tables:\n")
+cat("   - *_00_file_index_all_outputs.csv (lists all files)\n")
+cat("   - *_20_correlation_analysis_summary_2cv_vs_3cv.csv\n")
+cat("   - *_30_statistical_summary_comprehensive_statistics.csv\n")
+cat("   - *_99_FINAL_SUMMARY.csv\n")
+
+if (analysis_params$run_intensity_analysis) {
+  cat("\n=== INTENSITY ANALYSIS FILES ===\n")
+  cat("📁 Location: intensity_analysis/ subdirectory\n")
+  cat("📈 Key Plots:\n")
+  cat("   - *_01_intensity_status_pie_chart.png\n")
+  cat("   - *_02_raw_intensity_histogram.png\n")
+  cat("   - *_10_combined_intensity_analysis.png\n")
+  cat("📋 Key Tables:\n")
+  cat("   - *_01_sample_breakdown_summary.csv\n")
+  cat("   - *_03_comprehensive_statistics.csv\n")
+  cat("   - *_06_intensity_thresholds.csv\n")
+}
+
+if (analysis_params$run_fusion_search) {
+  cat("\n=== FUSION SEARCH FILES ===\n")
+  cat("📁 Location: fusion_search/ subdirectory\n")
+  cat("🧬 Target: DNAJB1-PRKACA fusion junction\n")
+  cat("📈 Key Plots (if peptides found):\n")
+  cat("   - *_01_fusion_peptide_intensity_by_sample.png\n")
+  cat("   - *_04_fusion_peptide_positions.png\n")
+  cat("📋 Key Tables:\n")
+  cat("   - *_01_fusion_peptide_results.xlsx\n")
+  cat("   - *_04_theoretical_vs_found.xlsx\n")
+  cat("   - *_05_fusion_search_summary.csv\n")
+}
+
+if (analysis_params$run_peptide_sharing) {
+  cat("\n=== PEPTIDE SHARING ANALYSIS FILES ===\n")
+  cat("📁 Location: peptide_sharing/ subdirectory\n")
+  cat("🔗 Analysis: Sample distribution and peptide sharing patterns\n")
+  cat("📈 Key Plots:\n")
+  cat("   - *_01_peptide_count_distribution.png\n")
+  cat("   - *_02_unique_vs_shared_pie.png\n")
+  cat("   - *_06_jaccard_similarity_heatmap.png\n")
+  cat("   - *_07_upset_sample_intersections.png\n")
+  cat("   - *_08_combined_basic_analysis.png\n")
+  cat("📋 Key Tables:\n")
+  cat("   - *_01_peptide_sample_distribution.csv\n")
+  cat("   - *_06_robust_sharing_summary.csv\n")
+  cat("   - *_08_sample_jaccard_similarity.csv\n")
+  cat("   - *_07_robust_peptides_*.csv (multiple thresholds)\n")
+}
+
+# Display RU148 analysis results if performed
+if (exists("ru148_analysis_results") && !is.null(ru148_analysis_results)) {
+  cat("\n=== RU148 MULTI-OMICS ANALYSIS FILES ===\n")
+  cat("📁 Location: ru148_analysis/ subdirectory\n")
+  cat("🎯 Focus: Tumor-exclusive and tumor-upregulated peptides (>4-fold)\n")
+  
+  cat("\n📈 TUMOR-EXCLUSIVE ANALYSIS:\n")
+  cat("   📁 ru148_analysis/plots/tumor_exclusive/\n")
+  cat("   - *_01_regulation_categories.png\n")
+  cat("   - *_02_transcriptome_scatter.png\n")
+  cat("   - *_03_multiomics_heatmap.png\n")
+  cat("   - *_04_regulation_overlap.png\n")
+  cat("   📁 ru148_analysis/tables/tumor_exclusive/\n")
+  cat("   - *_tumor_exclusive_analysis.xlsx (comprehensive results)\n")
+  cat("   - *_tumor_exclusive_combined.csv\n")
+  
+  cat("\n📈 TUMOR-UPREGULATED ANALYSIS:\n")
+  cat("   📁 ru148_analysis/plots/tumor_upregulated/\n")
+  cat("   - *_01_regulation_categories.png\n")
+  cat("   - *_02_transcriptome_scatter.png\n")
+  cat("   - *_03_multiomics_heatmap.png\n")
+  cat("   - *_04_regulation_overlap.png\n")
+  cat("   📁 ru148_analysis/tables/tumor_upregulated/\n")
+  cat("   - *_tumor_upregulated_analysis.xlsx (comprehensive results)\n")
+  cat("   - *_tumor_upregulated_combined.csv\n")
+  
+  cat("\n📋 SUMMARY FILES:\n")
+  cat("   - *_ru148_analysis_summary.csv\n")
+  
+  # Print RU148-specific summary statistics
+  if (nrow(ru148_analysis_results$tumor_exclusive_results$peptides) > 0) {
+    cat("\n🔍 TUMOR-EXCLUSIVE PEPTIDE CATEGORIES:\n")
+    if (nrow(ru148_analysis_results$tumor_exclusive_results$regulation_categories) > 0) {
+      for (i in 1:nrow(ru148_analysis_results$tumor_exclusive_results$regulation_categories)) {
+        cat(sprintf("   %-40s: %d peptides\n", 
+                   ru148_analysis_results$tumor_exclusive_results$regulation_categories$regulation_category[i],
+                   ru148_analysis_results$tumor_exclusive_results$regulation_categories$count[i]))
+      }
+    }
+  }
+  
+  if (nrow(ru148_analysis_results$tumor_upregulated_results$peptides) > 0) {
+    cat("\n🔍 TUMOR-UPREGULATED PEPTIDE CATEGORIES:\n")
+    if (nrow(ru148_analysis_results$tumor_upregulated_results$regulation_categories) > 0) {
+      for (i in 1:nrow(ru148_analysis_results$tumor_upregulated_results$regulation_categories)) {
+        cat(sprintf("   %-40s: %d peptides\n", 
+                   ru148_analysis_results$tumor_upregulated_results$regulation_categories$regulation_category[i],
+                   ru148_analysis_results$tumor_upregulated_results$regulation_categories$count[i]))
+      }
+    }
+  }
+  
+  # Highlight most promising targets
+  consistent_exclusive <- ru148_analysis_results$tumor_exclusive_results$combined_analysis %>%
+    filter(regulation_category == "Consistent upregulation")
+  
+  consistent_upregulated <- ru148_analysis_results$tumor_upregulated_results$combined_analysis %>%
+    filter(regulation_category == "Consistent upregulation")
+  
+  if (nrow(consistent_exclusive) > 0 || nrow(consistent_upregulated) > 0) {
+    cat("\n🎯 MOST PROMISING NEOANTIGEN TARGETS:\n")
+    cat("   (Peptides with consistent upregulation across all omics layers)\n")
+    
+    if (nrow(consistent_exclusive) > 0) {
+      top_exclusive <- consistent_exclusive %>%
+        arrange(desc(total_intensity_148T)) %>%
+        head(5)
+      
+      cat("   📌 Top tumor-exclusive targets:\n")
+      for (i in 1:min(5, nrow(top_exclusive))) {
+        cat(sprintf("      %s (%s) - Intensity: %.1f\n", 
+                   top_exclusive$Peptide[i], 
+                   top_exclusive$primary_gene[i], 
+                   top_exclusive$total_intensity_148T[i]))
+      }
+    }
+    
+    if (nrow(consistent_upregulated) > 0) {
+      top_upregulated <- consistent_upregulated %>%
+        arrange(desc(log2_fold_change_immuno)) %>%
+        head(5)
+      
+      cat("   📌 Top tumor-upregulated targets:\n")
+      for (i in 1:min(5, nrow(top_upregulated))) {
+        cat(sprintf("      %s (%s) - FC: %.1fx\n", 
+                   top_upregulated$Peptide[i], 
+                   top_upregulated$primary_gene[i], 
+                   2^top_upregulated$log2_fold_change_immuno[i]))
+      }
+    }
+  }
+}
+
+cat("\n=== FILE NAMING CONVENTION ===\n")
+cat("All files start with: YYYYMMDD_HHMMSS_", analysis_params$dataset_name, "_\n")
+cat("Main analysis: organized by category (01_data_validation, 02_correlation_analysis, etc.)\n")
+cat("Sub-analyses: in dedicated subdirectories with their own numbering\n")
+cat("CSV files: numbered 00-99, with 00 being index and 99 being final summary\n")
+
+cat("\n✅ Complete analysis pipeline finished successfully!\n")
+cat("📁 All outputs saved to:", output_dir, "\n")
+
+# Count total files across all analyses including RU148
+total_files <- length(list.files(output_dir, recursive = TRUE, pattern = "\\.(png|csv|xlsx|tsv)$"))
+cat("📊 Total files generated:", total_files, "\n")
+
+cat("\n=== ANALYSIS CAPABILITIES SUMMARY ===\n")
+cat("🔬 Core Pipeline: Data validation, correlation analysis, statistical summaries\n")
+if (analysis_params$run_intensity_analysis) {
+  cat("📊 Intensity Analysis: Comprehensive statistical analysis of peptide intensities\n")
+}
+if (analysis_params$run_fusion_search) {
+  cat("🧬 Fusion Search: DNAJB1-PRKACA junction spanning peptide detection\n")
+}
+if (analysis_params$run_peptide_sharing) {
+  cat("🔗 Peptide Sharing: Sample distribution, similarity, and robust sharing analysis\n")
+}
+if (exists("ru148_analysis_results") && !is.null(ru148_analysis_results)) {
+  cat("🎯 RU148 Multi-Omics: Tumor-exclusive and upregulated peptide characterization\n")
+  cat("   └── Transcriptome, LFQ proteome, and TMT proteome integration\n")
+  cat("   └── Regulation pattern classification and neoantigen prioritization\n")
+}
+cat("📈 Output Format: Static PNG plots and CSV/Excel spreadsheets only\n")
+
+cat("\n=== NEXT STEPS FOR NEOANTIGEN DISCOVERY ===\n")
+if (exists("ru148_analysis_results") && !is.null(ru148_analysis_results)) {
+  cat("1. Review tumor-exclusive peptides with 'Consistent upregulation' classification\n")
+  cat("2. Examine tumor-upregulated peptides (>4-fold) with multi-omics support\n")
+  cat("3. Prioritize peptides based on:\n")
+  cat("   - High intensity/fold change in immunopeptidome\n")
+  cat("   - Consistent upregulation across transcriptome and proteome\n")
+  cat("   - Peptide length 8-12 amino acids (optimal for HLA-I presentation)\n")
+  cat("4. Consider HLA typing and peptide-HLA binding prediction\n")
+  cat("5. Validate selected candidates experimentally\n")
+} else {
+  cat("RU148 analysis not performed - enable for neoantigen discovery workflow\n")
+}
+```
+
